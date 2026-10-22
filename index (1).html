@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Oila hisobi</title>
+<style>
+:root{--bg:#F1F3F8;--card:#fff;--ink:#1B2440;--mut:#5F6985;--line:#DDE2EE;--pri:#2E3FA3;--on:#fff;--inc:#15803D;--exp:#C2410C}
+@media(prefers-color-scheme:dark){:root{--bg:#10142A;--card:#1A2040;--ink:#E8ECFA;--mut:#9AA3C4;--line:#2C3560;--pri:#8E9BFF;--on:#10142A;--inc:#4ADE80;--exp:#FB923C}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,"Segoe UI",sans-serif}
+main{max-width:880px;margin:0 auto;padding:20px 16px 60px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}h1{font-size:1.4rem;margin:0}
+input,select,button{font:inherit;color:inherit}
+input,select{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0;width:100%}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 14px}
+button.p,.tabs button.on{background:var(--pri);border-color:var(--pri);color:var(--on)}
+:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+.hero{margin:22px 0 8px;color:var(--mut)}.big{font-size:clamp(2rem,8vw,3.2rem);font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 22px}
+.stat{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:10px 12px}
+.stat span{display:block;color:var(--mut);font-size:.85rem}.stat b{font-variant-numeric:tabular-nums}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 10px}
+.tw{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:560px}th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.inc{color:var(--inc)}.exp{color:var(--exp)}.sm{font-size:.82rem;color:var(--mut)}.act{display:flex;gap:6px;justify-content:flex-end}
+</style></head><body><main>
+<div class="top"><h1>Oila hisobi</h1><input type="month" id="month" style="width:auto" aria-label="Oy"></div>
+<div class="hero">Shu oy qoldi (daromad − xarajat)<div class="big" id="bal"></div></div>
+<div class="stats" id="stats"></div>
+<form id="f">
+<select id="type" aria-label="Turi"><option value="expense">Xarajat</option><option value="income">Daromad</option><option value="grocery">Oziq-ovqat xaridi</option><option value="owe">Qarzimiz (biz olganmiz)</option><option value="lent">Qarz berdik</option></select>
+<input id="title" placeholder="Nomi yoki ism (guruch, Anvar)" required>
+<input id="amt" type="number" min="0" step="any" placeholder="Summa / jami narx (so'm)" required>
+<input id="qty" placeholder="Miqdor (5 kg) — oziq-ovqat uchun">
+<input id="date" type="date" required>
+<input id="note" placeholder="Izoh">
+<button class="p">Saqlash</button></form>
+<div class="sm" id="msg" role="status"></div>
+<div class="tabs"><button data-tab="all">Shu oy hammasi</button><button data-tab="grocery">Oziq-ovqat</button><button data-tab="debt">Ochiq qarzlar</button></div>
+<div class="tw"><table><thead><tr><th>Sana</th><th>Turi</th><th>Nomi</th><th style="text-align:right">Summa</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+<p class="act" style="justify-content:flex-start;margin-top:16px"><button id="csv">CSV yuklab olish</button><button id="json">JSON zaxira</button><label class="sm" style="align-self:center">Zaxirani yuklash: <input type="file" id="imp" accept=".json" style="width:auto"></label></p>
+</main><script>
+const $=s=>document.querySelector(s),KEY="oila-hisobi",L={expense:"Xarajat",income:"Daromad",grocery:"Oziq-ovqat",owe:"Qarzimiz",lent:"Qarz berdik"};
+let D=[],tab="all";
+try{D=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}};
+const fmt=n=>Math.round(n).toLocaleString("ru-RU")+" so'm";
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+$("#month").value=today().slice(0,7);$("#date").value=today();
+const isDebt=r=>r.type=="owe"||r.type=="lent";
+function render(){
+ const ym=$("#month").value,M=D.filter(r=>r.date.startsWith(ym)),O=D.filter(r=>isDebt(r)&&!r.paid);
+ const S=(a,...t)=>a.filter(r=>t.includes(r.type)).reduce((s,r)=>s+r.amount,0);
+ const inc=S(M,"income"),spent=S(M,"expense","grocery");
+ $("#bal").textContent=fmt(inc-spent);$("#bal").className="big "+(inc-spent<0?"exp":"inc");
+ $("#stats").innerHTML=[["Daromad",inc,"--inc"],["Xarajat",spent,"--exp"],["Shundan oziq-ovqat",S(M,"grocery"),"--exp"],["Qarzimiz",S(O,"owe"),"--pri"],["Bizga qarzdor",S(O,"lent"),"--pri"]].map(([a,b,c])=>`<div class="stat" style="--c:var(${c})"><span>${a}</span><b>${fmt(b)}</b></div>`).join("");
+ const V=(tab=="all"?M:tab=="grocery"?M.filter(r=>r.type=="grocery"):O).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+ $("#rows").innerHTML=V.length?V.map(r=>{
+  const c=r.type=="income"?"inc":isDebt(r)?"":"exp",sg=r.type=="income"?"+":isDebt(r)?"":"−";
+  const pb=isDebt(r)&&!r.paid?`<button data-a="paid" data-id="${r.id}">To'landi</button>`:"";
+  return `<tr><td>${r.date}</td><td>${L[r.type]}</td><td>${esc(r.title)}${r.qty?` <span class="sm">(${esc(r.qty)})</span>`:""}${r.note?`<div class="sm">${esc(r.note)}</div>`:""}</td><td class="n ${c}">${sg}${fmt(r.amount)}</td><td><div class="act">${pb}<button data-a="del" data-id="${r.id}" aria-label="O'chirish">✕</button></div></td></tr>`}).join(""):`<tr><td colspan="5" class="sm">Hozircha yozuv yo'q. Yuqoridagi shakldan qo'shing.</td></tr>`;
+ document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab==tab));
+}
+$("#f").onsubmit=e=>{e.preventDefault();const a=parseFloat($("#amt").value);if(!(a>0))return;
+ D.push({id:Date.now(),type:$("#type").value,title:$("#title").value.trim(),amount:a,qty:$("#qty").value.trim(),note:$("#note").value.trim(),date:$("#date").value,paid:false});
+ save();["#title","#amt","#qty","#note"].forEach(s=>$(s).value="");$("#msg").textContent="Saqlandi";
+ $("#month").value=$("#date").value.slice(0,7);render()};
+$("#rows").onclick=e=>{const b=e.target.closest("button");if(!b)return;const id=+b.dataset.id;
+ if(b.dataset.a=="del"){if(!confirm("O'chirilsinmi?"))return;D=D.filter(r=>r.id!=id)}else D.find(r=>r.id==id).paid=true;save();render()};
+document.querySelector(".tabs").onclick=e=>{const b=e.target.closest("button");if(b){tab=b.dataset.tab;render()}};
+$("#month").onchange=render;
+const dl=(n,t,m)=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()};
+$("#csv").onclick=()=>dl("oila-hisobi.csv","\ufeffsana,tur,nomi,summa,miqdor,izoh,tolangan\n"+D.map(r=>[r.date,L[r.type],r.title,r.amount,r.qty,r.note,r.paid?"ha":"yoq"].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n"),"text/csv");
+$("#json").onclick=()=>dl("oila-zaxira.json",JSON.stringify(D),"application/json");
+$("#imp").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(t=>{try{const x=JSON.parse(t);if(Array.isArray(x)){D=x;save();render()}}catch(_){alert("Fayl noto'g'ri")}})};
+render();
+</script></body></html>
